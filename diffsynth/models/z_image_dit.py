@@ -537,7 +537,13 @@ class ZImageDiT(nn.Module):
 
         x = torch.cat(x, dim=0)
         x = self.all_x_embedder[f"{patch_size}-{f_patch_size}"](x)
-        x[torch.cat(x_inner_pad_mask)] = self.x_pad_token.to(dtype=x.dtype, device=x.device)
+        # ROCm compatibility: move to CPU for boolean indexing, then back to device
+        pad_mask = torch.cat(x_inner_pad_mask)
+        if pad_mask.any():
+            pad_indices = pad_mask.cpu().nonzero().squeeze(dim=-1)
+            x_cpu = x.cpu()
+            x_cpu[pad_indices] = self.x_pad_token.cpu().to(dtype=x_cpu.dtype)
+            x.copy_(x_cpu)
         x = list(x.split(x_item_seqlens, dim=0))
         x_freqs_cis = list(self.rope_embedder(torch.cat(x_pos_ids, dim=0)).split(x_item_seqlens, dim=0))
 
@@ -565,7 +571,13 @@ class ZImageDiT(nn.Module):
 
         cap_feats = torch.cat(cap_feats, dim=0)
         cap_feats = self.cap_embedder(cap_feats)
-        cap_feats[torch.cat(cap_inner_pad_mask)] = self.cap_pad_token.to(dtype=x.dtype, device=x.device)
+        # ROCm compatibility: move to CPU for boolean indexing, then back to device
+        cap_pad_mask = torch.cat(cap_inner_pad_mask)
+        if cap_pad_mask.any():
+            cap_pad_indices = cap_pad_mask.cpu().nonzero().squeeze(dim=-1)
+            cap_feats_cpu = cap_feats.cpu()
+            cap_feats_cpu[cap_pad_indices] = self.cap_pad_token.cpu().to(dtype=x.dtype)
+            cap_feats.copy_(cap_feats_cpu)
         cap_feats = list(cap_feats.split(cap_item_seqlens, dim=0))
         cap_freqs_cis = list(self.rope_embedder(torch.cat(cap_pos_ids, dim=0)).split(cap_item_seqlens, dim=0))
 

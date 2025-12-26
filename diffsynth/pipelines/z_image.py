@@ -191,7 +191,11 @@ class ZImageUnit_PromptEmbedder(PipelineUnit):
         embeddings_list = []
 
         for i in range(len(prompt_embeds)):
-            embeddings_list.append(prompt_embeds[i][prompt_masks[i]])
+            # Move to CPU for ROCm compatibility, then back to device
+            mask_i = prompt_masks[i].cpu()
+            embed_i = prompt_embeds[i].cpu()
+            selected = embed_i[mask_i]  # Boolean indexing works on CPU
+            embeddings_list.append(selected.to(device))
 
         return embeddings_list
 
